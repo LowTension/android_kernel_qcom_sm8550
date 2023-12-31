@@ -5,6 +5,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/delay.h>
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
 #include <linux/interrupt.h>
@@ -1315,9 +1316,9 @@ static int spi_geni_mas_setup(struct spi_master *spi)
 {
 	struct spi_geni_master *mas = spi_master_get_devdata(spi);
 	int proto = geni_se_read_proto(&mas->spi_rsc);
-	unsigned int major = 0;
-	unsigned int minor = 0;
-	u32 hw_ver = 0;
+	unsigned int major;
+	unsigned int minor;
+	int hw_ver;
 	int ret = 0;
 
 	if (spi->slave) {
@@ -1442,10 +1443,10 @@ setup_ipc:
 
 	if (!mas->is_deep_sleep) {
 		hw_ver = geni_se_get_qup_hw_version(&mas->spi_rsc);
-		if (!hw_ver) {
+		if (hw_ver)
 			dev_err(mas->dev, "%s:Err getting HW version %d\n",
 							__func__, hw_ver);
-		} else {
+		else {
 			major = GENI_SE_VERSION_MAJOR(hw_ver);
 			minor = GENI_SE_VERSION_MINOR(hw_ver);
 
@@ -2635,6 +2636,9 @@ exit_rt_resume:
 	}
 	if (geni_mas->gsi_mode)
 		ret = spi_geni_gpi_suspend_resume(geni_mas, false);
+
+	geni_write_reg(0x7f, geni_mas->base, GENI_OUTPUT_CTRL);
+	udelay(10);
 
 	enable_irq(geni_mas->irq);
 	return ret;

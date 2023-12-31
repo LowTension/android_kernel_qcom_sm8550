@@ -1798,7 +1798,7 @@ static int mhi_hwc_chcmd(struct mhi_dev *mhi, uint chid,
 	switch (type) {
 	case MHI_DEV_RING_EL_RESET:
 	case MHI_DEV_RING_EL_STOP:
-		if ((chid-(mhi->mhi_chan_hw_base)) >= NUM_HW_CHANNELS) {
+		if ((chid-(mhi->mhi_chan_hw_base)) > NUM_HW_CHANNELS) {
 			mhi_log(mhi->vf_id, MHI_MSG_ERROR,
 				"Invalid HW ch_id:%d\n", chid);
 			return -EINVAL;
@@ -1821,7 +1821,7 @@ static int mhi_hwc_chcmd(struct mhi_dev *mhi, uint chid,
 			return -EINVAL;
 		}
 
-		if ((chid-(mhi->mhi_chan_hw_base)) >= NUM_HW_CHANNELS) {
+		if ((chid-(mhi->mhi_chan_hw_base)) > NUM_HW_CHANNELS) {
 			mhi_log(mhi->vf_id, MHI_MSG_ERROR,
 				"Invalid HW ch_id:%d\n", chid);
 			return -EINVAL;
@@ -4418,11 +4418,6 @@ int mhi_ctrl_state_info(uint32_t ch_id, uint32_t *info)
 {
 	struct mhi_dev *mhi = mhi_get_dev_ctx(mhi_hw_ctx, MHI_DEV_PHY_FUN);
 
-	if (!mhi) {
-		mhi_log(MHI_DEV_PHY_FUN, MHI_MSG_ERROR, "MHI is NULL, defering\n");
-		return -EINVAL;
-	}
-
 	return __mhi_ctrl_state_info(mhi, mhi->vf_id, ch_id, info);
 }
 EXPORT_SYMBOL(mhi_ctrl_state_info);
@@ -4430,11 +4425,6 @@ EXPORT_SYMBOL(mhi_ctrl_state_info);
 int mhi_vf_ctrl_state_info(uint32_t vf_id, uint32_t ch_id, uint32_t *info)
 {
 	struct mhi_dev *mhi = mhi_get_dev_ctx(mhi_hw_ctx, vf_id);
-
-	if (!mhi) {
-		mhi_log(vf_id, MHI_MSG_ERROR, "MHI is NULL, defering\n");
-		return -EINVAL;
-	}
 
 	return __mhi_ctrl_state_info(mhi, vf_id, ch_id, info);
 }
@@ -5212,13 +5202,6 @@ static int mhi_dev_probe(struct platform_device *pdev)
 		}
 
 		mhi_pf = mhi_get_dev_ctx(mhi_hw_ctx, MHI_DEV_PHY_FUN);
-
-		if (!mhi_pf) {
-			mhi_log(MHI_DEFAULT_ERROR_LOG_ID, MHI_MSG_ERROR,
-					"mhi_pf is NULL, defering\n");
-			return -EINVAL;
-		}
-
 		/*
 		 * The below list and mutex should be initialized
 		 * before calling mhi_uci_init to avoid crash in
@@ -5242,13 +5225,6 @@ static int mhi_dev_probe(struct platform_device *pdev)
 		 * completion to make sure VF's are initialized in mission
 		 * mode directly, if not host assumes it in PBL state.
 		 */
-
-		if (!mhi_pf) {
-			mhi_log(MHI_DEFAULT_ERROR_LOG_ID, MHI_MSG_ERROR,
-					"mhi_pf is NULL, defering\n");
-			return -EINVAL;
-		}
-
 		mhi_dev_setup_virt_device(mhi_hw_ctx);
 		queue_work(mhi_pf->pcie_event_wq, &mhi_pf->pcie_event);
 	} else {

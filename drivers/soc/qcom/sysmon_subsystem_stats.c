@@ -223,33 +223,30 @@ static void sysmon_smem_init_adsp(void)
 
 	g_sysmon_stats.dsppm_stats_adsp = qcom_smem_get(ADSP,
 						DSPPMSTATS_SMEM_ID,
-						&size);
+						NULL);
 
-	if (IS_ERR_OR_NULL(g_sysmon_stats.dsppm_stats_adsp) ||
-		(sizeof(struct dsppm_stats) > size)) {
-		pr_err("%s:Failed to get fetch dsppm stats from SMEM for ADSP: %d, size: %d\n",
-				__func__, PTR_ERR(g_sysmon_stats.dsppm_stats_adsp), size);
+	if (IS_ERR_OR_NULL(g_sysmon_stats.dsppm_stats_adsp)) {
+		pr_err("%s:Failed to get fetch dsppm stats from SMEM for ADSP: %d\n",
+				__func__, PTR_ERR(g_sysmon_stats.dsppm_stats_adsp));
 		g_sysmon_stats.smem_init_adsp = false;
 	}
 
 	g_sysmon_stats.sleep_stats_adsp = qcom_smem_get(ADSP,
 						SLEEPSTATS_SMEM_ID_ADSP,
-						&size);
+						NULL);
 
-	if (IS_ERR_OR_NULL(g_sysmon_stats.sleep_stats_adsp) ||
-		(sizeof(struct sleep_stats) > size)) {
-		pr_err("%s:Failed to get fetch sleep data from SMEM for ADSP: %d, size: %d\n",
-				__func__, PTR_ERR(g_sysmon_stats.sleep_stats_adsp), size);
+	if (IS_ERR_OR_NULL(g_sysmon_stats.sleep_stats_adsp)) {
+		pr_err("%s:Failed to get fetch sleep data from SMEM for ADSP: %d\n",
+				__func__, PTR_ERR(g_sysmon_stats.sleep_stats_adsp));
 		g_sysmon_stats.smem_init_adsp = false;
 	}
 
 	g_sysmon_stats.sleep_lpi_adsp = qcom_smem_get(ADSP,
 						SLEEPSTATS_LPI_SMEM_ID,
-						&size);
-	if (IS_ERR_OR_NULL(g_sysmon_stats.sleep_lpi_adsp) ||
-		(sizeof(struct sleep_stats_island) > size)) {
-		pr_err("%s:Failed to get fetch LPI sleep data from SMEM for ADSP: %d, size: %d\n",
-				__func__, PTR_ERR(g_sysmon_stats.sleep_lpi_adsp), size);
+						NULL);
+	if (IS_ERR_OR_NULL(g_sysmon_stats.sleep_lpi_adsp)) {
+		pr_err("%s:Failed to get fetch LPI sleep data from SMEM for ADSP: %d\n",
+				__func__, PTR_ERR(g_sysmon_stats.sleep_lpi_adsp));
 		g_sysmon_stats.smem_init_adsp = false;
 	}
 
@@ -258,8 +255,8 @@ static void sysmon_smem_init_adsp(void)
 						&size);
 
 	if (IS_ERR_OR_NULL(smem_pointer_adsp) || !size) {
-		pr_err("%s:Failed to get fetch sysmon data from SMEM for ADSP: %d, size: %d\n",
-				__func__, PTR_ERR(smem_pointer_adsp), size);
+		pr_err("%s:Failed to get fetch sysmon data from SMEM for ADSP: %d\n",
+				__func__, PTR_ERR(smem_pointer_adsp));
 		g_sysmon_stats.smem_init_adsp = false;
 	}
 
@@ -300,23 +297,21 @@ static void sysmon_smem_init_cdsp(void)
 
 	g_sysmon_stats.dsppm_stats_cdsp = qcom_smem_get(CDSP,
 						DSPPMSTATS_SMEM_ID,
-						&size);
+						NULL);
 
-	if (IS_ERR_OR_NULL(g_sysmon_stats.dsppm_stats_cdsp) ||
-		(sizeof(struct dsppm_stats) > size)) {
-		pr_err("%s:Failed to get fetch dsppm stats from SMEM for CDSP: %d, size: %d\n",
-				__func__, PTR_ERR(g_sysmon_stats.dsppm_stats_cdsp), size);
+	if (IS_ERR_OR_NULL(g_sysmon_stats.dsppm_stats_cdsp)) {
+		pr_err("%s:Failed to get fetch dsppm stats from SMEM for CDSP: %d\n",
+				__func__, PTR_ERR(g_sysmon_stats.dsppm_stats_cdsp));
 		g_sysmon_stats.smem_init_cdsp = false;
 	}
 
 	g_sysmon_stats.sleep_stats_cdsp = qcom_smem_get(CDSP,
 						SLEEPSTATS_SMEM_ID_CDSP,
-						&size);
+						NULL);
 
-	if (IS_ERR_OR_NULL(g_sysmon_stats.sleep_stats_cdsp) ||
-		(sizeof(struct sleep_stats) > size)) {
-		pr_err("%s:Failed to get fetch sleep data from SMEM for CDSP: %d, size: %d\n",
-				__func__, PTR_ERR(g_sysmon_stats.sleep_stats_cdsp), size);
+	if (IS_ERR_OR_NULL(g_sysmon_stats.sleep_stats_cdsp)) {
+		pr_err("%s:Failed to get fetch sleep data from SMEM for CDSP: %d\n",
+				__func__, PTR_ERR(g_sysmon_stats.sleep_stats_cdsp));
 		g_sysmon_stats.smem_init_cdsp = false;
 	}
 
@@ -324,8 +319,8 @@ static void sysmon_smem_init_cdsp(void)
 							SYSMON_SMEM_ID,
 							&size);
 	if (IS_ERR_OR_NULL(smem_pointer_cdsp) || !size) {
-		pr_err("%s:Failed to get fetch data from SMEM for CDSP: %d, size: %d\n",
-				__func__, PTR_ERR(smem_pointer_cdsp), size);
+		pr_err("%s:Failed to get fetch data from SMEM for CDSP: %d\n",
+				__func__, PTR_ERR(smem_pointer_cdsp));
 		g_sysmon_stats.smem_init_cdsp = false;
 	}
 
@@ -381,22 +376,20 @@ static void sysmon_smem_init_slpi(void)
 
 	g_sysmon_stats.sleep_stats_slpi = qcom_smem_get(SLPI,
 						SLEEPSTATS_SMEM_ID_SLPI,
-						&size);
+						NULL);
 
-	if (IS_ERR_OR_NULL(g_sysmon_stats.sleep_stats_slpi) ||
-		(sizeof(struct sleep_stats) > size)) {
-		pr_err("%s:Failed to get fetch sleep data from SMEM for SLPI: %d, size: %d\n",
-				__func__, PTR_ERR(g_sysmon_stats.sleep_stats_slpi), size);
+	if (IS_ERR_OR_NULL(g_sysmon_stats.sleep_stats_slpi)) {
+		pr_err("%s:Failed to get fetch sleep data from SMEM for SLPI: %d\n",
+				__func__, PTR_ERR(g_sysmon_stats.sleep_stats_slpi));
 		g_sysmon_stats.smem_init_slpi = false;
 	}
 
 	g_sysmon_stats.sleep_lpi_slpi = qcom_smem_get(SLPI,
 						SLEEPSTATS_LPI_SMEM_ID,
-						&size);
-	if (IS_ERR_OR_NULL(g_sysmon_stats.sleep_lpi_slpi) ||
-		(sizeof(struct sleep_stats_island) > size)) {
-		pr_err("%s:Failed to get fetch LPI sleep data from SMEM for SLPI: %d, size: %d\n",
-				__func__, PTR_ERR(g_sysmon_stats.sleep_lpi_slpi), size);
+						NULL);
+	if (IS_ERR_OR_NULL(g_sysmon_stats.sleep_lpi_slpi)) {
+		pr_err("%s:Failed to get fetch LPI sleep data from SMEM for SLPI: %d\n",
+				__func__, PTR_ERR(g_sysmon_stats.sleep_lpi_slpi));
 		g_sysmon_stats.smem_init_slpi = false;
 	}
 
@@ -405,8 +398,8 @@ static void sysmon_smem_init_slpi(void)
 							&size);
 
 	if (IS_ERR_OR_NULL(smem_pointer_slpi) || !size) {
-		pr_err("%s:Failed to get fetch data from SMEM for SLPI: %d, size: %d\n",
-				__func__, PTR_ERR(smem_pointer_slpi), size);
+		pr_err("%s:Failed to get fetch data from SMEM for SLPI: %d\n",
+				__func__, PTR_ERR(smem_pointer_slpi));
 	}
 
 	update_sysmon_smem_pointers(smem_pointer_slpi, SLPI, size);

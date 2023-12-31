@@ -44,14 +44,6 @@
 #define SLOW 1
 #define FAST 2
 
-/* CPU Clusters Info */
-enum cpu_cluster_info {
-	SILVER_CORE,
-	GOLD_CORE,
-	GOLD_PRIME_CORE,
-	MAX_NUM_CLUSTERS,
-};
-
 enum ufs_qcom_phy_submode {
 	UFS_QCOM_PHY_SUBMODE_NON_G4,
 	UFS_QCOM_PHY_SUBMODE_G4,
@@ -81,7 +73,7 @@ enum ufs_qcom_ber_mode {
 
 /* default value of auto suspend is 3 seconds */
 #define UFS_QCOM_AUTO_SUSPEND_DELAY	3000
-#define UFS_QCOM_CLK_GATING_DELAY_MS_PWR_SAVE	10
+#define UFS_QCOM_CLK_GATING_DELAY_MS_PWR_SAVE	20
 #define UFS_QCOM_CLK_GATING_DELAY_MS_PERF	50
 
 /* QCOM UFS host controller vendor specific registers */
@@ -609,9 +601,7 @@ struct ufs_qcom_host {
 	atomic_t hi_pri_en;
 	atomic_t therm_mitigation;
 	cpumask_t perf_mask;
-	cpumask_t silver_mask;
-	cpumask_t gold_mask;
-	cpumask_t gold_prime_mask;
+	cpumask_t def_mask;
 	u32 vccq_lpm_uV;
 	bool disable_wb_support;
 	struct ufs_qcom_ber_hist ber_hist[UFS_QCOM_BER_MODE_MAX];
@@ -622,6 +612,7 @@ struct ufs_qcom_host {
 	bool bypass_pbl_rst_wa;
 	struct notifier_block ufs_qcom_panic_nb;
 
+	bool skip_flush;
 };
 
 static inline u32

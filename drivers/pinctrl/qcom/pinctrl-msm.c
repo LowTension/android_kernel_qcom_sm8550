@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2013, Sony Mobile Communications AB.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
  */
 
@@ -35,6 +34,10 @@
 #include "../pinconf.h"
 #include "pinctrl-msm.h"
 #include "../pinctrl-utils.h"
+
+#if IS_ENABLED(CONFIG_SEC_GPIO_DVS)
+#include "secgpio_dvs.h"
+#endif
 
 #define MAX_NR_GPIO 300
 #define MAX_NR_TILES 4
@@ -696,6 +699,200 @@ static void msm_gpio_set(struct gpio_chip *chip, unsigned offset, int value)
 	raw_spin_unlock_irqrestore(&pctrl->lock, flags);
 }
 
+#if IS_ENABLED(CONFIG_SEC_GPIO_DUMP)
+struct gpiomux_setting {
+	int func;
+	int drv;
+	int pull;
+	int is_out;
+	int val;
+};
+
+void msm_gp_get_all(struct gpio_chip *chip, u32 pin_no, struct gpiomux_setting *set)
+{
+	const struct msm_pingroup *g;
+	struct msm_pinctrl *pctrl = gpiochip_get_data(chip);
+	u32 ctl_reg, io_reg;
+	int drive;
+
+	g = &pctrl->soc->groups[pin_no];
+
+	ctl_reg = msm_readl_ctl(pctrl, g);
+	io_reg = msm_readl_io(pctrl, g);
+
+	set->is_out = !!(ctl_reg & BIT(g->oe_bit));
+	set->func = (ctl_reg >> g->mux_bit) & 7;
+	drive = (ctl_reg >> g->drv_bit) & 7;	
+	set->drv = msm_regval_to_drive(drive);
+	set->pull = (ctl_reg >> g->pull_bit) & 3;
+
+	if (set->is_out)
+		set->val = !!(io_reg & BIT(g->out_bit));
+	else
+		set->val = !!(io_reg & BIT(g->in_bit));	
+}
+EXPORT_SYMBOL(msm_gp_get_all);
+
+#define AP_GPIO_MAX   210
+#define GET_RESULT_GPIO(a, b, c)	\
+	((a<<4 & 0xF0) | (b<<1 & 0xE) | (c & 0x1))
+
+#if IS_ENABLED(CONFIG_SEC_GPIO_DVS)
+/****************************************************************/
+/* Pre-defined variables. (DO NOT CHANGE THIS!!) */
+static unsigned char checkgpiomap_result[GDVS_PHONE_STATUS_MAX][AP_GPIO_MAX];
+static struct gpiomap_result gpiomap_result = {
+	.init = checkgpiomap_result[PHONE_INIT],
+	.sleep = checkgpiomap_result[PHONE_SLEEP]
+};
+	
+static void msm_check_gpio_status(unsigned char phonestate)
+{
+	struct gpio_chip *gp;
+	struct gpiomux_setting set;
+	int i;
+	u8 temp_io = 0, temp_pdpu = 0, temp_lh = 0;
+
+	if (!msm_pinctrl_data) {
+		pr_err("pinctrl data is not available\n");
+		return;
+	}
+
+	gp = &msm_pinctrl_data->chip;
+
+	pr_info("[dvs_%s] state : %s\n", __func__,
+		(phonestate == PHONE_INIT) ? "init" : "sleep");
+
+	for (i = 0; i < AP_GPIO_MAX; i++) {
+		/* If it is not valid gpio or secure, Shows IN/PD/L */
+		if (!gpiochip_line_is_valid(gp, i)) {
+			checkgpiomap_result[phonestate][i] =
+				GET_RESULT_GPIO(0x1, 0x1, 0x0);
+			continue;
+		}
+		
+		msm_gp_get_all(gp, i, &set);
+
+		if (set.func == 0) {
+			if (set.is_out)
+				temp_io = 0x02;	/* GPIO_OUT */
+			else
+				temp_io = 0x01;	/* GPIO_IN */
+		} else
+			temp_io = 0x0;		/* FUNC */
+
+		switch (set.pull) {
+		case MSM_NO_PULL:
+			temp_pdpu = 0x00;
+			break;
+		case MSM_PULL_DOWN:
+			temp_pdpu = 0x01;
+			break;
+		/* 
+		 * gpiodvs is only for samsung,
+		 * so pull definition could be different from original value.
+		 * gpiodvs definition: PU(0x2), KEEPER(0x3)
+		 */
+		case MSM_PULL_UP:
+			temp_pdpu = 0x02;
+			break;
+		case MSM_KEEPER:
+			temp_pdpu = 0x03;
+			break;
+		default:
+			temp_pdpu = 0x07;
+			break;
+		}
+
+		temp_lh = set.val;
+
+		checkgpiomap_result[phonestate][i] =
+			GET_RESULT_GPIO(temp_io, temp_pdpu, temp_lh);
+	}
+
+	pr_info("[dvs_%s]-\n", __func__);
+}
+
+static struct gpio_dvs_t msm_gpio_dvs = {
+	.result = &gpiomap_result,
+	.check_gpio_status = msm_check_gpio_status,
+	.count = AP_GPIO_MAX,
+	.check_sleep = false,
+};
+
+const struct secgpio_dvs_data msm_gpio_dvs_data = {
+	.gpio_dvs = &msm_gpio_dvs,
+};
+EXPORT_SYMBOL_GPL(msm_gpio_dvs_data);
+#endif /* CONFIG_SEC_GPIO_DVS */
+
+static const char * const gpiomux_func_str[] = {
+	"GPIO",
+	"Func_1",
+	"Func_2",
+	"Func_3",
+	"Func_4",
+	"Func_5",
+	"Func_6",
+	"Func_7",
+	"Func_8",
+	"Func_9",
+	"Func_a",
+	"Func_b",
+	"Func_c",
+	"Func_d",
+	"Func_e",
+	"Func_f",
+};
+
+static const char * const gpiomux_pull_str[] = {
+	"PULL_NONE",
+	"PULL_DOWN",
+	"PULL_KEEPER",
+	"PULL_UP",
+};
+
+static const char * const gpiomux_dir_str[] = {
+	"IN",
+	"OUT",
+};
+
+static const char * const gpiomux_val_str[] = {
+	"LOW",
+	"HIGH",
+};
+
+void sec_ap_gpio_debug_print(void)
+{
+	struct gpio_chip *gp;
+	struct gpiomux_setting set = {0,};
+	int i;
+
+	if (!msm_pinctrl_data) {
+		pr_err("pinctrl data is not available\n");
+		return;
+	}
+
+	gp = &msm_pinctrl_data->chip;
+
+	for (i = 0; i < AP_GPIO_MAX; i++) {
+		if(!gpiochip_line_is_valid(gp, i))
+			continue;
+
+		msm_gp_get_all(gp, i, &set);
+
+        pr_info("GPIO[%u] %10s %10s %13s DRV_%dmA %10s\n",
+				i,
+				gpiomux_func_str[set.func],
+                gpiomux_dir_str[set.is_out],
+                gpiomux_pull_str[set.pull],
+                set.drv,
+                gpiomux_val_str[set.val]);
+	}
+}
+EXPORT_SYMBOL(sec_ap_gpio_debug_print);
+#endif /* CONFIG_SEC_GPIO_DUMP */
+
 #ifdef CONFIG_DEBUG_FS
 #include <linux/seq_file.h>
 
@@ -886,44 +1083,13 @@ static void msm_gpio_update_dual_edge_pos(struct msm_pinctrl *pctrl,
 		val, val2);
 }
 
-static bool is_gpio_tlmm_dc(struct irq_data *d, u32 *offset,
-				irq_hw_number_t *irq)
-{
-	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
-	struct msm_pinctrl *pctrl = gpiochip_get_data(gc);
-	struct msm_dir_conn *dc;
-	int i;
-
-	for (i = pctrl->n_dir_conns; i > 0; i--) {
-		dc = &pctrl->soc->dir_conn[i];
-		*offset = pctrl->n_dir_conns - i;
-		*irq = dc->irq;
-
-		if (dc->gpio == d->hwirq)
-			return true;
-	}
-
-	return false;
-}
-
 static void msm_gpio_irq_mask(struct irq_data *d)
 {
 	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
 	struct msm_pinctrl *pctrl = gpiochip_get_data(gc);
 	const struct msm_pingroup *g;
 	unsigned long flags;
-	struct irq_data *dir_conn_data;
-	irq_hw_number_t dir_conn_irq = 0;
-	u32 offset = 0;
 	u32 val;
-
-	if (is_gpio_tlmm_dc(d, &offset, &dir_conn_irq)) {
-		dir_conn_data = irq_get_irq_data(dir_conn_irq);
-		if (!dir_conn_data)
-			return;
-
-		dir_conn_data->chip->irq_mask(dir_conn_data);
-	}
 
 	if (d->parent_data)
 		irq_chip_mask_parent(d);
@@ -973,18 +1139,7 @@ static void msm_gpio_irq_unmask(struct irq_data *d)
 	struct msm_pinctrl *pctrl = gpiochip_get_data(gc);
 	const struct msm_pingroup *g;
 	unsigned long flags;
-	struct irq_data *dir_conn_data;
-	irq_hw_number_t dir_conn_irq = 0;
-	u32 offset = 0;
 	u32 val;
-
-	if (is_gpio_tlmm_dc(d, &offset, &dir_conn_irq)) {
-		dir_conn_data = irq_get_irq_data(dir_conn_irq);
-		if (!dir_conn_data)
-			return;
-
-		dir_conn_data->chip->irq_unmask(dir_conn_data);
-	}
 
 	if (d->parent_data)
 		irq_chip_unmask_parent(d);
@@ -1019,6 +1174,26 @@ static void msm_gpio_dirconn_handler(struct irq_desc *desc)
 	chained_irq_exit(chip, desc);
 	irq_set_irqchip_state(irq_desc_get_irq_data(desc)->irq,
 				  IRQCHIP_STATE_ACTIVE, 0);
+}
+
+static bool is_gpio_tlmm_dc(struct irq_data *d, u32 *offset,
+				irq_hw_number_t *irq)
+{
+	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
+	struct msm_pinctrl *pctrl = gpiochip_get_data(gc);
+	struct msm_dir_conn *dc;
+	int i;
+
+	for (i = pctrl->n_dir_conns; i > 0; i--) {
+		dc = &pctrl->soc->dir_conn[i];
+		*offset = pctrl->n_dir_conns - i;
+		*irq = dc->irq;
+
+		if (dc->gpio == d->hwirq)
+			return true;
+	}
+
+	return false;
 }
 
 static void configure_tlmm_dc_polarity(struct irq_data *d,
@@ -1061,17 +1236,6 @@ static void msm_gpio_irq_enable(struct irq_data *d)
 {
 	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
 	struct msm_pinctrl *pctrl = gpiochip_get_data(gc);
-	struct irq_data *dir_conn_data;
-	irq_hw_number_t dir_conn_irq = 0;
-	u32 offset = 0;
-
-	if (is_gpio_tlmm_dc(d, &offset, &dir_conn_irq)) {
-		dir_conn_data = irq_get_irq_data(dir_conn_irq);
-		if (!dir_conn_data)
-			return;
-
-		dir_conn_data->chip->irq_unmask(dir_conn_data);
-	}
 
 	if (d->parent_data)
 		irq_chip_enable_parent(d);
@@ -1084,17 +1248,6 @@ static void msm_gpio_irq_disable(struct irq_data *d)
 {
 	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
 	struct msm_pinctrl *pctrl = gpiochip_get_data(gc);
-	struct irq_data *dir_conn_data;
-	irq_hw_number_t dir_conn_irq = 0;
-	u32 offset = 0;
-
-	if (is_gpio_tlmm_dc(d, &offset, &dir_conn_irq)) {
-		dir_conn_data = irq_get_irq_data(dir_conn_irq);
-		if (!dir_conn_data)
-			return;
-
-		dir_conn_data->chip->irq_mask(dir_conn_data);
-	}
 
 	if (d->parent_data)
 		irq_chip_disable_parent(d);
@@ -1424,21 +1577,6 @@ static int msm_gpio_irq_set_affinity(struct irq_data *d,
 {
 	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
 	struct msm_pinctrl *pctrl = gpiochip_get_data(gc);
-
-	unsigned int i, n_dir_conns = pctrl->n_dir_conns;
-	struct irq_data *gpio_irq_data;
-	struct msm_dir_conn *dc = NULL;
-
-	for (i = n_dir_conns; i > 0; i--) {
-		dc = &pctrl->soc->dir_conn[i];
-		gpio_irq_data = irq_get_irq_data(dc->irq);
-
-		if (!gpio_irq_data || !(gpio_irq_data->chip))
-			continue;
-
-		if (d->hwirq == dc->gpio)
-			return gpio_irq_data->chip->irq_set_affinity(gpio_irq_data, dest, force);
-	}
 
 	if (d->parent_data && test_bit(d->hwirq, pctrl->skip_wake_irqs))
 		return irq_chip_set_affinity_parent(d, dest, force);

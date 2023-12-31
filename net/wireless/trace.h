@@ -3165,15 +3165,14 @@ TRACE_EVENT(cfg80211_control_port_tx_status,
 
 TRACE_EVENT(cfg80211_rx_control_port,
 	TP_PROTO(struct net_device *netdev, struct sk_buff *skb,
-		 bool unencrypted, int link_id),
-	TP_ARGS(netdev, skb, unencrypted, link_id),
+		 bool unencrypted),
+	TP_ARGS(netdev, skb, unencrypted),
 	TP_STRUCT__entry(
 		NETDEV_ENTRY
 		__field(int, len)
 		MAC_ENTRY(from)
 		__field(u16, proto)
 		__field(bool, unencrypted)
-		__field(int, link_id)
 	),
 	TP_fast_assign(
 		NETDEV_ASSIGN;
@@ -3181,12 +3180,10 @@ TRACE_EVENT(cfg80211_rx_control_port,
 		MAC_ASSIGN(from, eth_hdr(skb)->h_source);
 		__entry->proto = be16_to_cpu(skb->protocol);
 		__entry->unencrypted = unencrypted;
-		__entry->link_id = link_id;
 	),
-	TP_printk(NETDEV_PR_FMT ", len=%d, %pM, proto: 0x%x, unencrypted: %s, link: %d",
+	TP_printk(NETDEV_PR_FMT ", len=%d, %pM, proto: 0x%x, unencrypted: %s",
 		  NETDEV_PR_ARG, __entry->len, __entry->from,
-		  __entry->proto, BOOL_TO_STR(__entry->unencrypted),
-		  __entry->link_id)
+		  __entry->proto, BOOL_TO_STR(__entry->unencrypted))
 );
 
 TRACE_EVENT(cfg80211_cqm_rssi_notify,
@@ -3921,6 +3918,43 @@ TRACE_EVENT(rdev_del_link_station,
 		  __entry->link_id)
 );
 
+TRACE_EVENT(rdev_get_link_tid_map_status,
+	TP_PROTO(struct wiphy *wiphy, struct net_device *netdev,
+		 struct cfg80211_mlo_tid_map *map),
+	TP_ARGS(wiphy, netdev, map),
+	TP_STRUCT__entry(
+		WIPHY_ENTRY
+		NETDEV_ENTRY
+		__field(bool, default_map)
+		__array(u8, t2lmap, sizeof(struct tid_link_map))
+	),
+	TP_fast_assign(
+		WIPHY_ASSIGN;
+		NETDEV_ASSIGN;
+		__entry->default_map = map->default_map;
+		memcpy(__entry->t2lmap, &map->t2lmap, sizeof(map->t2lmap));
+	),
+	TP_printk(WIPHY_PR_FMT ", " NETDEV_PR_FMT "default_map: %d ",
+		  WIPHY_PR_ARG, NETDEV_PR_ARG, __entry->default_map)
+);
+
+TRACE_EVENT(cfg80211_tid_to_link_map_change,
+	TP_PROTO(struct net_device *netdev,
+		 struct cfg80211_mlo_tid_map *map),
+	TP_ARGS(netdev, map),
+	TP_STRUCT__entry(
+		NETDEV_ENTRY
+		__field(bool, default_map)
+		__array(u8, t2lmap, sizeof(struct tid_link_map))
+	),
+	TP_fast_assign(
+		NETDEV_ASSIGN;
+		__entry->default_map = map->default_map;
+		memcpy(__entry->t2lmap, &map->t2lmap, sizeof(map->t2lmap));
+	),
+	TP_printk(NETDEV_PR_FMT ", default_map: %d ",
+		  NETDEV_PR_ARG, __entry->default_map)
+);
 #endif /* !__RDEV_OPS_TRACE || TRACE_HEADER_MULTI_READ */
 
 #undef TRACE_INCLUDE_PATH

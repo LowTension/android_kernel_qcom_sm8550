@@ -12,7 +12,6 @@
 #include <linux/io.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
-#include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
 #include <linux/regulator/consumer.h>
@@ -88,14 +87,6 @@
 
 #define USB_HSPHY_VDD_HPM_LOAD			30000	/* uA */
 
-
-/* struct hs_phy_priv_data - target specific private data */
-struct hs_phy_priv_data {
-	bool limit_control_vdd;
-	bool limit_control_vdda_18;
-	bool limit_control_vdda33;
-};
-
 struct msm_hsphy {
 	struct usb_phy		phy;
 	void __iomem		*base;
@@ -121,6 +112,13 @@ struct msm_hsphy {
 
 	int			*param_override_seq;
 	int			param_override_seq_cnt;
+#if IS_ENABLED(CONFIG_USB_NOTIFIER)
+	int			*param_host_override_seq;
+	int			param_host_override_seq_cnt;
+#endif
+#if IS_ENABLED(CONFIG_USB_PHY_TUNING_QCOM)
+	bool			hsphy_tune_init_done;
+#endif
 
 	void __iomem		*phy_rcal_reg;
 	u32			rcal_mask;
@@ -141,8 +139,160 @@ struct msm_hsphy {
 	u8			param_ovrd1;
 	u8			param_ovrd2;
 	u8			param_ovrd3;
-	const struct hs_phy_priv_data *phy_priv_data;
 };
+
+#undef dev_dbg
+#define dev_dbg dev_err
+
+#if IS_ENABLED(CONFIG_USB_PHY_TUNING_QCOM)
+static ssize_t x0_show(struct device *dev, struct device_attribute *attr,
+		char *buf)
+{
+	struct msm_hsphy *phy = dev_get_drvdata(dev);
+
+	if (!phy) {
+		pr_err("phy is NULL\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "0x%x\n", (readl_relaxed(phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X0) & 0xff));
+}
+static ssize_t x0_store(struct device *dev, struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct msm_hsphy *phy = dev_get_drvdata(dev);
+	u32 val;
+
+	if (!phy) {
+		pr_err("phy is NULL\n");
+		return -ENODEV;
+	}
+	sscanf(buf, "%x", &val);
+	phy->param_ovrd0 = val & 0xff;
+	if (phy->param_ovrd0)
+		writel_relaxed(phy->param_ovrd0, phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X0);
+	usleep_range(1, 2);
+	pr_info("%s():set x0 by adb :0x%x\n", __func__,
+		(readl_relaxed(phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X0) & 0xff));
+
+	return count;
+}
+static DEVICE_ATTR_RW(x0);
+
+static ssize_t x1_show(struct device *dev, struct device_attribute *attr,
+		char *buf)
+{
+	struct msm_hsphy *phy = dev_get_drvdata(dev);
+
+	if (!phy) {
+		pr_err("phy is NULL\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "0x%x\n", (readl_relaxed(phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X1) & 0xff));
+}
+static ssize_t x1_store(struct device *dev, struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct msm_hsphy *phy = dev_get_drvdata(dev);
+	u32 val;
+
+	if (!phy) {
+		pr_err("phy is NULL\n");
+		return -ENODEV;
+	}
+	sscanf(buf, "%x", &val);
+	phy->param_ovrd1 = val & 0xff;
+	if (phy->param_ovrd1)
+		writel_relaxed(phy->param_ovrd1, phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X1);
+	usleep_range(1, 2);
+	pr_info("%s():set x1 by adb :0x%x\n", __func__,
+		(readl_relaxed(phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X1) & 0xff));
+
+	return count;
+}
+static DEVICE_ATTR_RW(x1);
+
+static ssize_t x2_show(struct device *dev, struct device_attribute *attr,
+		char *buf)
+{
+	struct msm_hsphy *phy = dev_get_drvdata(dev);
+
+	if (!phy) {
+		pr_err("phy is NULL\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "0x%x\n", (readl_relaxed(phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X2) & 0xff));
+}
+static ssize_t x2_store(struct device *dev, struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct msm_hsphy *phy = dev_get_drvdata(dev);
+	u32 val;
+
+	if (!phy) {
+		pr_err("phy is NULL\n");
+		return -ENODEV;
+	}
+	sscanf(buf, "%x", &val);
+	phy->param_ovrd2 = val & 0xff;
+	if (phy->param_ovrd2)
+		writel_relaxed(phy->param_ovrd2, phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X2);
+	usleep_range(1, 2);
+	pr_info("%s():set x2 by adb :0x%x\n", __func__,
+		(readl_relaxed(phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X2) & 0xff));
+
+	return count;
+}
+static DEVICE_ATTR_RW(x2);
+
+static ssize_t x3_show(struct device *dev, struct device_attribute *attr,
+		char *buf)
+{
+	struct msm_hsphy *phy = dev_get_drvdata(dev);
+
+	if (!phy) {
+		pr_err("phy is NULL\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "0x%x\n", (readl_relaxed(phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X3) & 0xff));
+}
+static ssize_t x3_store(struct device *dev, struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct msm_hsphy *phy = dev_get_drvdata(dev);
+	u32 val;
+
+	if (!phy) {
+		pr_err("phy is NULL\n");
+		return -ENODEV;
+	}
+	sscanf(buf, "%x", &val);
+	phy->param_ovrd3 = val & 0xff;
+	if (phy->param_ovrd3)
+		writel_relaxed(phy->param_ovrd3, phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X3);
+	usleep_range(1, 2);
+	pr_info("%s():set x3 by adb :0x%x\n", __func__,
+		(readl_relaxed(phy->base + USB2PHY_USB_PHY_PARAMETER_OVERRIDE_X3) & 0xff));
+
+	return count;
+}
+static DEVICE_ATTR_RW(x3);
+
+static struct attribute *hsphy_attrs[] = {
+	&dev_attr_x0.attr,
+	&dev_attr_x1.attr,
+	&dev_attr_x2.attr,
+	&dev_attr_x3.attr,
+	NULL,
+};
+
+static struct attribute_group hsphy_attr_grp = {
+	.attrs = hsphy_attrs,
+};
+#endif
 
 static void msm_hsphy_enable_clocks(struct msm_hsphy *phy, bool on)
 {
@@ -175,176 +325,6 @@ static void msm_hsphy_enable_clocks(struct msm_hsphy *phy, bool on)
 
 }
 
-static int vdd_phy_enable_disable(struct msm_hsphy *phy, bool on)
-{
-	int ret = 0;
-
-	if (!on)
-		goto disable_vdd;
-
-	if (phy->phy_priv_data == NULL || !phy->phy_priv_data->limit_control_vdd) {
-		ret = regulator_set_load(phy->vdd, USB_HSPHY_VDD_HPM_LOAD);
-		if (ret < 0) {
-			dev_err(phy->phy.dev, "Unable to set HPM of vdd:%d\n", ret);
-			goto err_vdd;
-		}
-
-		ret = regulator_set_voltage(phy->vdd, phy->vdd_levels[1],
-					    phy->vdd_levels[2]);
-		if (ret) {
-			dev_err(phy->phy.dev, "unable to set voltage for hsusb vdd\n");
-			goto put_vdd_lpm;
-		}
-	}
-
-	ret = regulator_enable(phy->vdd);
-	if (ret) {
-		dev_err(phy->phy.dev, "Unable to enable VDD\n");
-		goto unconfig_vdd;
-	}
-
-	dev_dbg(phy->phy.dev, "%s(): HSUSB PHY's vdd turned ON.\n", __func__);
-
-	return ret;
-
-disable_vdd:
-	ret = regulator_disable(phy->vdd);
-	if (ret)
-		dev_err(phy->phy.dev, "Unable to disable vdd:%d\n", ret);
-
-unconfig_vdd:
-	if (phy->phy_priv_data == NULL || !phy->phy_priv_data->limit_control_vdd) {
-		ret = regulator_set_voltage(phy->vdd, phy->vdd_levels[0],
-					    phy->vdd_levels[2]);
-		if (ret)
-			dev_err(phy->phy.dev, "unable to set voltage for hsusb vdd\n");
-	}
-
-put_vdd_lpm:
-	if (phy->phy_priv_data == NULL || !phy->phy_priv_data->limit_control_vdd) {
-		ret = regulator_set_load(phy->vdd, 0);
-		if (ret < 0)
-			dev_err(phy->phy.dev, "Unable to set LPM of vdd\n");
-	}
-
-err_vdd:
-	return ret;
-}
-
-static int vdda18_phy_enable_disable(struct msm_hsphy *phy, bool on)
-{
-	int ret = 0;
-
-	if (!on)
-		goto disable_vdda18;
-
-	if (phy->phy_priv_data == NULL || !phy->phy_priv_data->limit_control_vdda_18) {
-		ret = regulator_set_load(phy->vdda18, USB_HSPHY_1P8_HPM_LOAD);
-		if (ret < 0) {
-			dev_err(phy->phy.dev, "Unable to set HPM of vdda18:%d\n", ret);
-			goto err_vdda18;
-		}
-
-		ret = regulator_set_voltage(phy->vdda18, USB_HSPHY_1P8_VOL_MIN,
-							USB_HSPHY_1P8_VOL_MAX);
-		if (ret) {
-			dev_err(phy->phy.dev,
-					"Unable to set voltage for vdda18:%d\n", ret);
-			goto put_vdda18_lpm;
-		}
-	}
-
-	ret = regulator_enable(phy->vdda18);
-	if (ret) {
-		dev_err(phy->phy.dev, "Unable to enable vdda18:%d\n", ret);
-		goto unset_vdda18;
-	}
-
-	dev_dbg(phy->phy.dev, "%s(): HSUSB PHY's vdda18 turned ON.\n", __func__);
-
-	return ret;
-
-disable_vdda18:
-	ret = regulator_disable(phy->vdda18);
-	if (ret)
-		dev_err(phy->phy.dev, "Unable to disable vdda18:%d\n", ret);
-
-unset_vdda18:
-	if (phy->phy_priv_data == NULL || !phy->phy_priv_data->limit_control_vdda_18) {
-		ret = regulator_set_voltage(phy->vdda18, 0, USB_HSPHY_1P8_VOL_MAX);
-		if (ret)
-			dev_err(phy->phy.dev,
-				"Unable to set (0) voltage for vdda18:%d\n", ret);
-	}
-
-put_vdda18_lpm:
-	if (phy->phy_priv_data == NULL || !phy->phy_priv_data->limit_control_vdda_18) {
-		ret = regulator_set_load(phy->vdda18, 0);
-		if (ret < 0)
-			dev_err(phy->phy.dev, "Unable to set LPM of vdda18\n");
-	}
-
-err_vdda18:
-	return ret;
-}
-
-static int vdda33_phy_enable_disable(struct msm_hsphy *phy, bool on)
-{
-	int ret = 0;
-
-	if (!on)
-		goto disable_vdda33;
-
-	if (phy->phy_priv_data == NULL || !phy->phy_priv_data->limit_control_vdda33) {
-		ret = regulator_set_load(phy->vdda33, USB_HSPHY_3P3_HPM_LOAD);
-		if (ret < 0) {
-			dev_err(phy->phy.dev, "Unable to set HPM of vdda33:%d\n", ret);
-			goto err_vdda33;
-		}
-
-		ret = regulator_set_voltage(phy->vdda33, USB_HSPHY_3P3_VOL_MIN,
-							USB_HSPHY_3P3_VOL_MAX);
-		if (ret) {
-			dev_err(phy->phy.dev,
-					"Unable to set voltage for vdda33:%d\n", ret);
-			goto put_vdda33_lpm;
-		}
-	}
-
-	ret = regulator_enable(phy->vdda33);
-	if (ret) {
-		dev_err(phy->phy.dev, "Unable to enable vdda33:%d\n", ret);
-		goto unset_vdd33;
-	}
-
-	dev_dbg(phy->phy.dev, "%s(): HSUSB PHY's vdda33 turned ON.\n", __func__);
-
-	return ret;
-
-disable_vdda33:
-	ret = regulator_disable(phy->vdda33);
-	if (ret)
-		dev_err(phy->phy.dev, "Unable to disable vdda33:%d\n", ret);
-
-unset_vdd33:
-	if (phy->phy_priv_data == NULL || !phy->phy_priv_data->limit_control_vdda33) {
-		ret = regulator_set_voltage(phy->vdda33, 0, USB_HSPHY_3P3_VOL_MAX);
-		if (ret)
-			dev_err(phy->phy.dev,
-				"Unable to set (0) voltage for vdda33:%d\n", ret);
-	}
-
-put_vdda33_lpm:
-	if (phy->phy_priv_data == NULL || !phy->phy_priv_data->limit_control_vdda33) {
-		ret = regulator_set_load(phy->vdda33, 0);
-		if (ret < 0)
-			dev_err(phy->phy.dev, "Unable to set (0) HPM of vdda33\n");
-	}
-
-err_vdda33:
-	return ret;
-}
-
 static int msm_hsphy_enable_power(struct msm_hsphy *phy, bool on)
 {
 	int ret = 0;
@@ -357,28 +337,123 @@ static int msm_hsphy_enable_power(struct msm_hsphy *phy, bool on)
 		return 0;
 	}
 
-	ret = vdd_phy_enable_disable(phy, on);
-	if (ret < 0)
-		goto err_hs_reg;
+	if (!on)
+		goto disable_vdda33;
 
-	ret = vdda18_phy_enable_disable(phy, on);
-	if (ret < 0)
-		goto err_hs_reg;
+	ret = regulator_set_load(phy->vdd, USB_HSPHY_VDD_HPM_LOAD);
+	if (ret < 0) {
+		dev_err(phy->phy.dev, "Unable to set HPM of vdd:%d\n", ret);
+		goto err_vdd;
+	}
 
-	ret = vdda33_phy_enable_disable(phy, on);
-	if (ret < 0)
-		goto err_hs_reg;
+	ret = regulator_set_voltage(phy->vdd, phy->vdd_levels[1],
+				    phy->vdd_levels[2]);
+	if (ret) {
+		dev_err(phy->phy.dev, "unable to set voltage for hsusb vdd\n");
+		goto put_vdd_lpm;
+	}
 
-	if (on)
-		phy->power_enabled = true;
-	else
-		phy->power_enabled = false;
+	ret = regulator_enable(phy->vdd);
+	if (ret) {
+		dev_err(phy->phy.dev, "Unable to enable VDD\n");
+		goto unconfig_vdd;
+	}
 
+	ret = regulator_set_load(phy->vdda18, USB_HSPHY_1P8_HPM_LOAD);
+	if (ret < 0) {
+		dev_err(phy->phy.dev, "Unable to set HPM of vdda18:%d\n", ret);
+		goto disable_vdd;
+	}
+
+	ret = regulator_set_voltage(phy->vdda18, USB_HSPHY_1P8_VOL_MIN,
+						USB_HSPHY_1P8_VOL_MAX);
+	if (ret) {
+		dev_err(phy->phy.dev,
+				"Unable to set voltage for vdda18:%d\n", ret);
+		goto put_vdda18_lpm;
+	}
+
+	ret = regulator_enable(phy->vdda18);
+	if (ret) {
+		dev_err(phy->phy.dev, "Unable to enable vdda18:%d\n", ret);
+		goto unset_vdda18;
+	}
+
+	ret = regulator_set_load(phy->vdda33, USB_HSPHY_3P3_HPM_LOAD);
+	if (ret < 0) {
+		dev_err(phy->phy.dev, "Unable to set HPM of vdda33:%d\n", ret);
+		goto disable_vdda18;
+	}
+
+	ret = regulator_set_voltage(phy->vdda33, USB_HSPHY_3P3_VOL_MIN,
+						USB_HSPHY_3P3_VOL_MAX);
+	if (ret) {
+		dev_err(phy->phy.dev,
+				"Unable to set voltage for vdda33:%d\n", ret);
+		goto put_vdda33_lpm;
+	}
+
+	ret = regulator_enable(phy->vdda33);
+	if (ret) {
+		dev_err(phy->phy.dev, "Unable to enable vdda33:%d\n", ret);
+		goto unset_vdd33;
+	}
+
+	phy->power_enabled = true;
+
+	pr_debug("%s(): HSUSB PHY's regulators are turned ON.\n", __func__);
 	return ret;
 
-err_hs_reg:
-	dev_err(phy->phy.dev, "HSUSB PHY's regulators set/unset failed\n");
-	dev_err(phy->phy.dev, "Some or all HSUSB PHY's regulators are turned OFF\n");
+disable_vdda33:
+	ret = regulator_disable(phy->vdda33);
+	if (ret)
+		dev_err(phy->phy.dev, "Unable to disable vdda33:%d\n", ret);
+
+unset_vdd33:
+	ret = regulator_set_voltage(phy->vdda33, 0, USB_HSPHY_3P3_VOL_MAX);
+	if (ret)
+		dev_err(phy->phy.dev,
+			"Unable to set (0) voltage for vdda33:%d\n", ret);
+
+put_vdda33_lpm:
+	ret = regulator_set_load(phy->vdda33, 0);
+	if (ret < 0)
+		dev_err(phy->phy.dev, "Unable to set (0) HPM of vdda33\n");
+
+disable_vdda18:
+	ret = regulator_disable(phy->vdda18);
+	if (ret)
+		dev_err(phy->phy.dev, "Unable to disable vdda18:%d\n", ret);
+
+unset_vdda18:
+	ret = regulator_set_voltage(phy->vdda18, 0, USB_HSPHY_1P8_VOL_MAX);
+	if (ret)
+		dev_err(phy->phy.dev,
+			"Unable to set (0) voltage for vdda18:%d\n", ret);
+
+put_vdda18_lpm:
+	ret = regulator_set_load(phy->vdda18, 0);
+	if (ret < 0)
+		dev_err(phy->phy.dev, "Unable to set LPM of vdda18\n");
+
+disable_vdd:
+	ret = regulator_disable(phy->vdd);
+	if (ret)
+		dev_err(phy->phy.dev, "Unable to disable vdd:%d\n", ret);
+
+unconfig_vdd:
+	ret = regulator_set_voltage(phy->vdd, phy->vdd_levels[0],
+				    phy->vdd_levels[2]);
+	if (ret)
+		dev_err(phy->phy.dev, "unable to set voltage for hsusb vdd\n");
+
+put_vdd_lpm:
+	ret = regulator_set_load(phy->vdd, 0);
+	if (ret < 0)
+		dev_err(phy->phy.dev, "Unable to set LPM of vdd\n");
+err_vdd:
+	phy->power_enabled = false;
+	dev_dbg(phy->phy.dev, "HSUSB PHY's regulators are turned OFF.\n");
 	return ret;
 }
 
@@ -500,6 +575,12 @@ static int msm_hsphy_init(struct usb_phy *uphy)
 				VBUSVLDEXT0, VBUSVLDEXT0);
 
 	/* set parameter ovrride  if needed */
+#if IS_ENABLED(CONFIG_USB_NOTIFIER)
+	if (phy->param_host_override_seq && (phy->phy.flags & PHY_HOST_MODE))
+		hsusb_phy_write_seq(phy->base, phy->param_host_override_seq,
+				phy->param_host_override_seq_cnt, 0);
+	else
+#endif
 	if (phy->param_override_seq)
 		hsusb_phy_write_seq(phy->base, phy->param_override_seq,
 				phy->param_override_seq_cnt, 0);
@@ -598,7 +679,15 @@ static int msm_hsphy_set_suspend(struct usb_phy *uphy, int suspend)
 
 suspend:
 	if (suspend) { /* Bus suspend */
-		if (phy->cable_connected) {
+		/*
+		 * The HUB class drivers calls usb_phy_notify_disconnect() upon a device
+		 * disconnect. Consider a scenario where a USB device is disconnected without
+		 * detaching the OTG cable. phy->cable_connected is marked false due to above
+		 * mentioned call path. Now, while entering low power mode (host bus suspend),
+		 * we come here and turn off regulators thinking no cable is connected. Prevent
+		 * this by not turning off regulators while in host mode.
+		 */
+		if (phy->cable_connected || (phy->phy.flags & PHY_HOST_MODE)) {
 			/* Enable auto-resume functionality during host mode
 			 * bus suspend with some FS/HS peripheral connected.
 			 */
@@ -846,7 +935,6 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 	struct msm_hsphy *phy;
 	struct device *dev = &pdev->dev;
 	struct resource *res;
-	const struct hs_phy_priv_data *driver_data;
 	int ret = 0;
 
 	phy = devm_kzalloc(dev, sizeof(*phy), GFP_KERNEL);
@@ -855,8 +943,6 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 		goto err_ret;
 	}
 
-	driver_data = of_device_get_match_data(dev);
-	phy->phy_priv_data = driver_data;
 	phy->phy.dev = dev;
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
 						"hsusb_phy_base");
@@ -959,6 +1045,35 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 		}
 	}
 
+#if IS_ENABLED(CONFIG_USB_NOTIFIER)
+	phy->param_host_override_seq_cnt = of_property_count_elems_of_size(
+					dev->of_node,
+					"qcom,param-host-override-seq",
+					sizeof(*phy->param_host_override_seq));
+	if (phy->param_host_override_seq_cnt > 0) {
+		phy->param_host_override_seq = devm_kcalloc(dev,
+					phy->param_host_override_seq_cnt,
+					sizeof(*phy->param_host_override_seq),
+					GFP_KERNEL);
+		if (!phy->param_host_override_seq)
+			return -ENOMEM;
+
+		if (phy->param_host_override_seq_cnt % 2) {
+			dev_err(dev, "invalid param_host_override_seq_len\n");
+			return -EINVAL;
+		}
+
+		ret = of_property_read_u32_array(dev->of_node,
+				"qcom,param-host-override-seq",
+				phy->param_host_override_seq,
+				phy->param_host_override_seq_cnt);
+		if (ret) {
+			dev_err(dev, "qcom,param-host-override-seq read failed %d\n",
+				ret);
+			return ret;
+		}
+	}
+#endif
 	ret = of_property_read_u32_array(dev->of_node, "qcom,vdd-voltage-level",
 					 (u32 *) phy->vdd_levels,
 					 ARRAY_SIZE(phy->vdd_levels));
@@ -966,6 +1081,7 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 		dev_err(dev, "error reading qcom,vdd-voltage-level property\n");
 		goto err_ret;
 	}
+
 
 	phy->vdd = devm_regulator_get(dev, "vdd");
 	if (IS_ERR(phy->vdd)) {
@@ -1011,6 +1127,14 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 	INIT_WORK(&phy->vbus_draw_work, msm_hsphy_vbus_draw_work);
 	msm_hsphy_create_debugfs(phy);
 
+#if IS_ENABLED(CONFIG_USB_PHY_TUNING_QCOM)
+	phy->hsphy_tune_init_done = true;
+	ret = sysfs_create_group(&pdev->dev.kobj, &hsphy_attr_grp);
+	if (ret) {
+		phy->hsphy_tune_init_done = false;
+		pr_err("%s: hsphy sysfs fail, ret %d", __func__, ret);
+	}
+#endif
 	/*
 	 * EUD may be enable in boot loader and to keep EUD session alive across
 	 * kernel boot till USB phy driver is initialized based on cable status,
@@ -1041,24 +1165,20 @@ static int msm_hsphy_remove(struct platform_device *pdev)
 
 	msm_hsphy_enable_clocks(phy, false);
 	msm_hsphy_enable_power(phy, false);
+
+#if IS_ENABLED(CONFIG_USB_PHY_TUNING_QCOM)
+	if (phy->hsphy_tune_init_done)
+		sysfs_remove_group(&pdev->dev.kobj, &hsphy_attr_grp);
+#endif
 	return 0;
 }
-
-static const struct hs_phy_priv_data priv_data_lemans = {
-	.limit_control_vdda_18 = true,
-};
 
 static const struct of_device_id msm_usb_id_table[] = {
 	{
 		.compatible = "qcom,usb-hsphy-snps-femto",
 	},
-	{
-		.compatible = "qcom,usb-hsphy-snps-femto-lemans",
-		.data = &priv_data_lemans,
-	},
 	{ },
 };
-
 MODULE_DEVICE_TABLE(of, msm_usb_id_table);
 
 static struct platform_driver msm_hsphy_driver = {

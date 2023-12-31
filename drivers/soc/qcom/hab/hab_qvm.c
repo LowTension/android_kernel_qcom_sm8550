@@ -248,5 +248,3 @@ void hab_hypervisor_unregister(void)
 {
 	hab_hypervisor_unregister_os();
 }
-
-int hab_hypervisor_register_post(void) { return 0; }

@@ -108,25 +108,17 @@
 #define REMOTE_SCALARS_OUTHANDLES(sc)    ((sc) & 0x0f)
 
 /* Remote domains ID */
-#define ADSP_DOMAIN_ID		(0)
-#define MDSP_DOMAIN_ID		(1)
-#define SDSP_DOMAIN_ID		(2)
-#define CDSP_DOMAIN_ID		(3)
-#define CDSP1_DOMAIN_ID		(4)
-#define GPDSP_DOMAIN_ID		(5)
-#define GPDSP1_DOMAIN_ID	(6)
-#define MAX_DOMAIN_ID	GPDSP1_DOMAIN_ID
+#define ADSP_DOMAIN_ID	(0)
+#define MDSP_DOMAIN_ID	(1)
+#define SDSP_DOMAIN_ID	(2)
+#define CDSP_DOMAIN_ID	(3)
+#define MAX_DOMAIN_ID	CDSP_DOMAIN_ID
 
-#define NUM_CHANNELS	(MAX_DOMAIN_ID + 1)	/* adsp, mdsp, slpi, cdsp, cdsp1, gpdsp, gpdsp1*/
+#define NUM_CHANNELS	4	/* adsp, mdsp, slpi, cdsp*/
 #define NUM_SESSIONS	13	/* max 12 compute, 1 cpz */
-
-#define RH_CID ADSP_DOMAIN_ID
 
 #define VALID_FASTRPC_CID(cid) \
 	(cid >= ADSP_DOMAIN_ID && cid < NUM_CHANNELS)
-
-#define GET_DEV_FROM_CID(me, cid) \
-	((me->dev[cid] == NULL) ? me->dev[RH_CID] : me->dev[cid])
 
 #define REMOTE_SCALARS_LENGTH(sc)	(REMOTE_SCALARS_INBUFS(sc) +\
 					REMOTE_SCALARS_OUTBUFS(sc) +\
@@ -698,6 +690,9 @@ enum fastrpc_msg_type {
 // Must be a power of two.
 #define DSPSIGNAL_GROUP_SIZE 256
 
+#define SS_MEM_PROFILE
+#define SS_MEM_DEBUG
+#define SS_FASTRPC_SYNC
 
 struct secure_vm {
 	int *vmid;
@@ -727,6 +722,11 @@ struct fastrpc_buf {
 	bool in_use;	/* Used only for persistent header buffers */
 	struct timespec64 buf_start_time;
 	struct timespec64 buf_end_time;
+
+#if defined(SS_MEM_DEBUG)
+	uint32_t pid;           /* alloc real pid */
+	char comm[TASK_COMM_LEN];
+#endif
 };
 
 struct fastrpc_ctx_lst;
@@ -928,7 +928,7 @@ struct fastrpc_apps {
 	int compat;
 	struct hlist_head drivers;
 	spinlock_t hlock;
-	struct device *dev[NUM_CHANNELS];
+	struct device *dev;
 	/* Indicates fastrpc device node info */
 	struct device *dev_fastrpc;
 	unsigned int latency;
@@ -985,6 +985,11 @@ struct fastrpc_mmap {
 	bool is_filemap;
 	char *servloc_name;			/* Indicate which daemon mapped this */
 	unsigned int ctx_refs; /* Indicates reference count for context map */
+
+#if defined(SS_MEM_DEBUG)
+	uint32_t pid;           /* alloc real pid */
+	char comm[TASK_COMM_LEN];
+#endif
 };
 
 enum fastrpc_perfkeys {
@@ -1111,6 +1116,17 @@ struct fastrpc_file {
 	bool exit_notif;
 	/* Flag to indicate async thread exit requested*/
 	bool exit_async;
+
+#if defined(SS_MEM_PROFILE)
+	unsigned int len_curr_usage;
+	unsigned int len_peak_usage;
+
+	unsigned int page_curr_usage;
+	unsigned int page_peak_usage;
+
+	struct mem_profile_private *mem_profile;
+#endif
+
 };
 
 union fastrpc_ioctl_param {

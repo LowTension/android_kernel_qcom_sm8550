@@ -96,7 +96,6 @@ static struct arm_smmu_option_prop arm_smmu_options[] = {
 	{ ARM_SMMU_OPT_DISABLE_ATOS, "qcom,disable-atos" },
 	{ ARM_SMMU_OPT_CONTEXT_FAULT_RETRY, "qcom,context-fault-retry" },
 	{ ARM_SMMU_OPT_MULTI_MATCH_HANDOFF_SMR, "qcom,multi-match-handoff-smr" },
-	{ ARM_SMMU_OPT_STATIC_CB, "qcom,enable-static-cb"},
 	{ 0, NULL},
 };
 
@@ -125,8 +124,6 @@ static inline void arm_smmu_rpm_put(struct arm_smmu_device *smmu)
 		pm_runtime_put_autosuspend(smmu->dev);
 	}
 }
-
-static bool arm_smmu_is_static_cb(struct arm_smmu_device *smmu);
 
 static struct arm_smmu_domain *to_smmu_domain(struct iommu_domain *dom)
 {
@@ -159,11 +156,6 @@ static bool is_iommu_pt_coherent(struct arm_smmu_domain *smmu_domain)
 	else if (smmu_domain->smmu && smmu_domain->smmu->dev)
 		return dev_is_dma_coherent(smmu_domain->smmu->dev);
 	return false;
-}
-
-static bool arm_smmu_is_static_cb(struct arm_smmu_device *smmu)
-{
-	return smmu->options & ARM_SMMU_OPT_STATIC_CB;
 }
 
 static bool arm_smmu_has_secure_vmid(struct arm_smmu_domain *smmu_domain)
@@ -420,17 +412,13 @@ static int __arm_smmu_alloc_cb(unsigned long *map, int start, int end,
 	struct arm_smmu_device *smmu = cfg->smmu;
 	int idx;
 	int i;
-	int cb = -EINVAL;
 
 	for_each_cfg_sme(cfg, fwspec, i, idx) {
 		if (smmu->s2crs[idx].pinned)
-			cb = smmu->s2crs[idx].cbndx;
+			return smmu->s2crs[idx].cbndx;
 	}
 
-	if (cb < 0 && !arm_smmu_is_static_cb(smmu))
-		return __arm_smmu_alloc_bitmap(map, start, end);
-
-	return cb;
+	return __arm_smmu_alloc_bitmap(map, start, end);
 }
 
 static void __arm_smmu_free_bitmap(unsigned long *map, int idx)
@@ -923,6 +911,27 @@ static irqreturn_t arm_smmu_context_fault_retry(struct arm_smmu_domain *smmu_dom
 }
 #endif
 
+static void debug_camera_faults(struct arm_smmu_domain *smmu_domain,
+		struct arm_smmu_device *smmu, int idx)
+{
+	unsigned long iova;
+	phys_addr_t phys_soft;
+	struct iommu_domain *domain = &smmu_domain->domain;
+
+	if (!strstr(dev_name(smmu_domain->dev), "cam_smmu"))
+		return;
+
+	print_fault_regs(smmu_domain, smmu, idx);
+	iova = arm_smmu_cb_readq(smmu, idx, ARM_SMMU_CB_FAR);
+	phys_soft = arm_smmu_iova_to_phys(domain, iova);
+	dev_err(smmu->dev, "soft iova-to-phys=%llx\n", (u64)phys_soft);
+
+	if (!phys_soft)
+		return;
+
+	arm_smmu_verify_fault(smmu_domain, smmu, idx);
+}
+
 static irqreturn_t arm_smmu_context_fault(int irq, void *dev)
 {
 	u32 fsr;
@@ -973,6 +982,8 @@ static irqreturn_t arm_smmu_context_fault(int irq, void *dev)
 	 *    SCTLR.HUPCF has the desired effect if subsequent transactions also
 	 *    need to be terminated.
 	 */
+	debug_camera_faults(smmu_domain, smmu, idx);
+
 	ret = report_iommu_fault_helper(smmu_domain, smmu, idx);
 	if (ret == -ENOSYS) {
 		if (__ratelimit(&_rs)) {
@@ -2103,7 +2114,7 @@ static int arm_smmu_attach_dev(struct iommu_domain *domain, struct device *dev)
 	 * to 5-10sec worth of reprogramming the context bank, while
 	 * the system appears to be locked up to the user.
 	 */
-	pm_runtime_set_autosuspend_delay(smmu->dev, 20);
+	pm_runtime_set_autosuspend_delay(smmu->dev, 5);
 	pm_runtime_use_autosuspend(smmu->dev);
 
 rpm_put:
@@ -3921,7 +3932,6 @@ static void __exit arm_smmu_exit(void)
 }
 module_exit(arm_smmu_exit);
 
-MODULE_SOFTDEP("pre: virt-arm-smmu-v3");
 MODULE_DESCRIPTION("IOMMU API for ARM architected SMMU implementations");
 MODULE_AUTHOR("Will Deacon <will@kernel.org>");
 MODULE_ALIAS("platform:arm-smmu");

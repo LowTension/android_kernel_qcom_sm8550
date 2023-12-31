@@ -1601,15 +1601,13 @@ static int hgsl_ioctl_get_shadowts_mem(struct file *filep, unsigned long arg)
 
 	dma_buf = ctxt->shadow_ts_node->dma_buf;
 	if (dma_buf) {
-		/* increase reference count before install fd. */
-		get_dma_buf(dma_buf);
 		params.fd = dma_buf_fd(dma_buf, O_CLOEXEC);
 		if (params.fd < 0) {
 			LOGE("dma buf to fd failed\n");
 			ret = -ENOMEM;
-			dma_buf_put(dma_buf);
 			goto out;
 		}
+		get_dma_buf(dma_buf);
 	}
 
 	if (copy_to_user(USRPTR(arg), &params, sizeof(params))) {
@@ -1821,6 +1819,19 @@ static int hgsl_ioctl_ctxt_create(struct file *filep, unsigned long arg)
 	init_waitqueue_head(&ctxt->wait_q);
 	mutex_init(&ctxt->lock);
 
+	write_lock(&hgsl->ctxt_lock);
+	if (hgsl->contexts[ctxt->context_id] != NULL) {
+		LOGE("context id %d already created",
+			ctxt->context_id);
+		ret = -EBUSY;
+		write_unlock(&hgsl->ctxt_lock);
+		goto out;
+	}
+
+	hgsl->contexts[ctxt->context_id] = ctxt;
+	write_unlock(&hgsl->ctxt_lock);
+	ctxt_created = true;
+
 	hgsl_get_shadowts_mem(hab_channel, ctxt);
 	if (!dbq_off)
 		hgsl_ctxt_create_dbq(priv, hab_channel, ctxt, dbq_info, dbq_info_checked);
@@ -1835,19 +1846,6 @@ static int hgsl_ioctl_ctxt_create(struct file *filep, unsigned long arg)
 		params.sync_type = HGSL_SYNC_TYPE_HSYNC;
 	else
 		params.sync_type = HGSL_SYNC_TYPE_ISYNC;
-
-	write_lock(&hgsl->ctxt_lock);
-	if (hgsl->contexts[ctxt->context_id] != NULL) {
-		LOGE("context id %d already created",
-			ctxt->context_id);
-		ret = -EBUSY;
-		write_unlock(&hgsl->ctxt_lock);
-		goto out;
-	}
-
-	hgsl->contexts[ctxt->context_id] = ctxt;
-	write_unlock(&hgsl->ctxt_lock);
-	ctxt_created = true;
 
 	if (copy_to_user(USRPTR(arg), &params, sizeof(params))) {
 		ret = -EFAULT;
@@ -2093,7 +2091,6 @@ static int hgsl_ioctl_mem_alloc(struct file *filep, unsigned long arg)
 	}
 
 	mem_node->flags = params.flags;
-	mem_node->default_iocoherency = hgsl->default_iocoherency;
 
 	ret = hgsl_sharedmem_alloc(hgsl->dev, params.sizebytes, params.flags, mem_node);
 	if (ret)
@@ -2105,16 +2102,14 @@ static int hgsl_ioctl_mem_alloc(struct file *filep, unsigned long arg)
 	if (ret)
 		goto out;
 
-	/* increase reference count before install fd. */
-	get_dma_buf(mem_node->dma_buf);
 	params.fd = dma_buf_fd(mem_node->dma_buf, O_CLOEXEC);
 
 	if (params.fd < 0) {
 		LOGE("dma_buf_fd failed, size 0x%x", mem_node->memdesc.size);
 		ret = -EINVAL;
-		dma_buf_put(mem_node->dma_buf);
 		goto out;
 	}
+	get_dma_buf(mem_node->dma_buf);
 
 	if (copy_to_user(USRPTR(arg), &params, sizeof(params))) {
 		ret = -EFAULT;
@@ -2257,7 +2252,6 @@ out:
 static int hgsl_ioctl_mem_map_smmu(struct file *filep, unsigned long arg)
 {
 	struct hgsl_priv *priv = filep->private_data;
-	struct qcom_hgsl *hgsl = priv->dev;
 	struct hgsl_ioctl_mem_map_smmu_params params;
 	int ret = 0;
 	struct hgsl_mem_node *mem_node = NULL;
@@ -2285,7 +2279,6 @@ static int hgsl_ioctl_mem_map_smmu(struct file *filep, unsigned long arg)
 	mem_node->flags = params.flags;
 	mem_node->fd = params.fd;
 	mem_node->memtype = params.memtype;
-	mem_node->default_iocoherency = hgsl->default_iocoherency;
 	ret = hgsl_hyp_mem_map_smmu(hab_channel, params.size, params.offset, mem_node);
 
 	if (ret == 0) {
@@ -3841,8 +3834,6 @@ static int qcom_hgsl_probe(struct platform_device *pdev)
 	if (!hgsl_dev->db_off)
 		hgsl_init_global_hyp_channel(hgsl_dev);
 
-	hgsl_dev->default_iocoherency = of_property_read_bool(pdev->dev.of_node,
-							"default_iocoherency");
 	platform_set_drvdata(pdev, hgsl_dev);
 
 	return 0;

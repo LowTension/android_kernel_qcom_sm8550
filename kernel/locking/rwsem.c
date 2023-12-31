@@ -664,16 +664,21 @@ enum owner_state {
 static inline bool rwsem_try_write_lock_unqueued(struct rw_semaphore *sem)
 {
 	long count = atomic_long_read(&sem->count);
+    bool ret = false;
 
+    preempt_disable();
 	while (!(count & (RWSEM_LOCK_MASK|RWSEM_FLAG_HANDOFF))) {
 		if (atomic_long_try_cmpxchg_acquire(&sem->count, &count,
 					count | RWSEM_WRITER_LOCKED)) {
 			rwsem_set_owner(sem);
 			lockevent_inc(rwsem_opt_lock);
-			return true;
+            ret = true;
+            break;
 		}
 	}
-	return false;
+
+    preempt_enable();
+    return ret;
 }
 
 static inline bool owner_on_cpu(struct task_struct *owner)
@@ -1281,7 +1286,7 @@ static struct rw_semaphore *rwsem_downgrade_wake(struct rw_semaphore *sem)
 /*
  * lock for reading
  */
-static __always_inline int __down_read_common(struct rw_semaphore *sem, int state)
+static inline int __down_read_common(struct rw_semaphore *sem, int state)
 {
 	long count;
 
@@ -1293,17 +1298,17 @@ static __always_inline int __down_read_common(struct rw_semaphore *sem, int stat
 	return 0;
 }
 
-static __always_inline void __down_read(struct rw_semaphore *sem)
+static inline void __down_read(struct rw_semaphore *sem)
 {
 	__down_read_common(sem, TASK_UNINTERRUPTIBLE);
 }
 
-static __always_inline int __down_read_interruptible(struct rw_semaphore *sem)
+static inline int __down_read_interruptible(struct rw_semaphore *sem)
 {
 	return __down_read_common(sem, TASK_INTERRUPTIBLE);
 }
 
-static __always_inline int __down_read_killable(struct rw_semaphore *sem)
+static inline int __down_read_killable(struct rw_semaphore *sem)
 {
 	return __down_read_common(sem, TASK_KILLABLE);
 }

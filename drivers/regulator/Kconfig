@@ -32,7 +32,7 @@ config REGULATOR_DEBUG
 
 config REGULATOR_DEBUG_CONTROL
 	tristate "Regulator debug control support"
-	depends on DEBUG_FS
+	depends on DEBUG_FS || SEC_PM
 	help
 	  This driver supports debugfs based control of regulators for testing
 	  purposes.  It provides a mechanism to vote on the enable state,
@@ -1565,13 +1565,5 @@ config VIRTIO_REGULATOR
 	  Qualcomm Technologies Inc. virtual machine. Virtio regulator can vote
 	  regulator for pass through peripheral devices via regulator backend in
 	  host.
-
-config REGULATOR_MEM_ACC
-        tristate "QTI Memory accelerator regulator driver"
-        help
-          Say y here to enable the memory accelerator driver for
-          Qualcomm Technologies, Inc. (QTI) chips. The accelerator
-          controls delays applied for memory accesses.  This driver
-          configures the power-mode(corner) for the memory accelerator.
 
 endif
